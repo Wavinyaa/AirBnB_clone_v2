@@ -1,10 +1,7 @@
 #!/usr/bin/python3
 """This is the console for AirBnB"""
-import cmd
-import shlex
-import json
 import re
-from ast import literal_eval
+import cmd
 from models import storage
 from datetime import datetime
 from models.base_model import BaseModel
@@ -21,9 +18,8 @@ class HBNBCommand(cmd.Cmd):
     """this class is entry point of the command interpreter
     """
     prompt = "(hbnb) "
-    all_classes = {"BaseModel": BaseModel, "User": User, "State": State,
-                   "City": City, "Amenity": Amenity, "Place": Place,
-                   "Review": Review}
+    all_classes = {"BaseModel", "User", "State", "City",
+                   "Amenity", "Place", "Review"}
 
     def emptyline(self):
         """Ignores empty spaces"""
@@ -41,78 +37,41 @@ class HBNBCommand(cmd.Cmd):
         """Creates a new instance of BaseModel, saves it
         Exceptions:
             SyntaxError: when there is no args given
-            NameError: when there is no object that has the name
+            NameError: when there is no object taht has the name
         """
-        try:
-            if not line:
-                raise SyntaxError()
-            # my_list = line.split(" ")
-            # if len(my_list) > 1:
-            #     cls = my_list.pop(0)
-            #     obj = eval("{}({})".format(cls, temp3))
-            # else:
-            #     obj = eval("{}()".format(my_list[0]))
-
-            # parser = shlex.shlex(line, posix=True)
-            # parser.whitespace_split = True
-            # token = " "
-            # arg_list = []
-            # tok_list = []
-            # cls = parser.get_token()
-            # while token is not None:
-            #     token = parser.get_token()
-            #     tok_list.append(token)
-            # del tok_list[-1]
-            # print(tok_list)
-            # for arg in tok_list:
-            #     arg_list.append(arg.split('=')[0])
-            # for arg in tok_list:
-            #     arg_list.append(arg.split('=')[1])
-            #     temp = literal_eval(arg_list[0])
-
-            parser = shlex.shlex(line, posix=True)
-            parser.whitespace_split = True
-            token = " "
-            tok_list = []
-            tup_list = []
-            to_parse = {}
-            sanitized_args = {}
-            cls = parser.get_token()
-            while token is not None:
-                token = parser.get_token()
-                tok_list.append(token)
-            for tup in tok_list:
-                if tup is not None:
-                    tup_list.append(tup.partition('='))
-            for tuple_item in tup_list:
-                to_parse[tuple_item[0]] = tuple_item[2]
-            for k, v in to_parse.items():
-
-                # Matches string beginnig with 1 or more alphanum
-                # followed and ended by _id
-                if re.match("^\w+_id$", k):
-                    sanitized_args[k] = v
-
-                # Matches string that could be starting with + or -,
-                # followed by 1 to any amount of numbers
-                # followed by  a '.'
-                # followed by and anding with 1 to any amount of numbers
-                elif re.match("^[-+]?\d+\.\d+$", v):
-                    sanitized_args[k] = float(v)
-                elif v.isdigit() is True:
-                    sanitized_args[k] = int(v)
-                else:
-                    if '_' in v:
-                        sanitized_args[k] = v.replace('_', ' ')
+        if line == "" or line is None:
+            print("** class name missing **")
+        else:
+            my_list = line.split(" ")
+            classname = my_list[0]
+            if classname not in storage.classes():
+                print("** class doesn't exist **")
+                return
+            obj = eval("{}()".format(classname))
+            for i in range(1, len(my_list)):
+                rex = r'^(\S+)\=(\S+)'
+                match = re.search(rex, my_list[i])
+                if not match:
+                    continue
+                key = match.group(1)
+                value = match.group(2)
+                cast = None
+                if not re.search('^".*"$', value):
+                    if '.' in value:
+                        cast = float
                     else:
-                        sanitized_args[k] = v
-            obj = HBNBCommand.all_classes[cls](**sanitized_args)
+                        cast = int
+                else:
+                    value = value.replace('"', '')
+                    value = value.replace('_', ' ')
+                if cast:
+                    try:
+                        value = cast(value)
+                    except ValueError:
+                        pass
+                setattr(obj, key, value)
             obj.save()
             print("{}".format(obj.id))
-        except SyntaxError:
-            print("** class name missing **")
-        except KeyError:
-            print("** class doesn't exist **")
 
     def do_show(self, line):
         """Prints the string representation of an instance
@@ -122,28 +81,20 @@ class HBNBCommand(cmd.Cmd):
             IndexError: when there is no id given
             KeyError: when there is no valid id given
         """
-        try:
-            if not line:
-                raise SyntaxError()
-            my_list = line.split(" ")
-            if my_list[0] not in self.all_classes:
-                raise NameError()
-            if len(my_list) < 2:
-                raise IndexError()
-            objects = storage.all()
-            key = my_list[0] + '.' + my_list[1]
-            if key in objects:
-                print(objects[key])
-            else:
-                raise KeyError()
-        except SyntaxError:
+        if line == "" or line is None:
             print("** class name missing **")
-        except NameError:
-            print("** class doesn't exist **")
-        except IndexError:
-            print("** instance id missing **")
-        except KeyError:
-            print("** no instance found **")
+        else:
+            words = line.split(' ')
+            if words[0] not in storage.classes():
+                print("** class doesn't exist **")
+            elif len(words) < 2:
+                print("** instance id missing **")
+            else:
+                key = "{}.{}".format(words[0], words[1])
+                if key not in storage.all():
+                    print("** no instance found **")
+                else:
+                    print(storage.all()[key])
 
     def do_destroy(self, line):
         """Deletes an instance based on the class name and id
@@ -182,7 +133,12 @@ class HBNBCommand(cmd.Cmd):
         Exceptions:
             NameError: when there is no object taht has the name
         """
-
+        if line:
+            args = line.split(" ")
+            if args[0] not in self.all_classes:
+                print("** class doesn't exist **")
+                return
+            objects = storage.all(line)
         my_list = []
         if not line:
             objects = storage.all()
@@ -190,16 +146,17 @@ class HBNBCommand(cmd.Cmd):
                 my_list.append(objects[key])
             print(my_list)
             return
-        try:
-            args = line.split(" ")
-            if args[0] not in self.all_classes:
-                raise NameError()
-            objects = storage.all(args[0])
-            for value in objects.values():
-                my_list.append(value)
-            print(my_list)
-        except NameError:
-            print("** class doesn't exist **")
+        # try:
+            # args = line.split(" ")
+            # if args[0] not in self.all_classes:
+            #     raise NameError()
+        for key in objects:
+            name = key.split('.')
+            if name[0] == args[0]:
+                my_list.append(objects[key])
+        print(my_list)
+        # except NameError:
+        #     print("** class doesn't exist **")
 
     def do_update(self, line):
         """Updates an instanceby adding or updating attribute
